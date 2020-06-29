@@ -1,0 +1,55 @@
+apply plugin: 'java'
+
+//def ideInstallationDir = new File('/Applications/Android Studio.app/Contents/')
+//def androidPluginLibPath = 'plugins/android/lib'
+def lintVersion = '27.0.0-alpha09'
+
+configurations {
+    lintChecks
+}
+
+configurations.all {
+    transitive = false
+}
+
+dependencies {
+    compileOnly "com.android.tools.lint:lint-api:$lintVersion"
+    compileOnly "com.android.tools.lint:lint-checks:$lintVersion"
+    compileOnly "com.android.tools.lint:lint:$lintVersion"
+    compileOnly "com.android.tools.external.org-jetbrains:uast:$lintVersion"
+    compileOnly "com.android.tools.external.com-intellij:intellij-core:$lintVersion"
+    compileOnly 'com.android.tools:common:26.5.3'
+    compileOnly 'com.android.tools.layoutlib:layoutlib-api:26.5.3'
+    compileOnly files('libs/android.jar')
+    compileOnly files('libs/idea.jar')
+    compileOnly files('libs/layoutlib.jar')
+    compileOnly files('libs/openapi.jar')
+    compileOnly files('libs/platform-api.jar')
+}
+
+jar {
+    manifest {
+        attributes("Lint-Registry-v2": "com.app.perlint.lint.PercentIssueRegistry")
+        attributes("Lint-Registry": "com.app.perlint.lint.PercentIssueRegistry")
+    }
+    archiveName('percent-lint.jar')
+}
+
+task installLint(type: Copy) {
+    setGroup('install')
+    def jarTask = tasks.findByName('jar')
+    dependsOn(jarTask)
+    from(jarTask.outputs.files)
+    into(new File(new File(System.getProperty("user.home")), '.android/lint/'))
+}
+
+task uninstallLint() {
+    setGroup('install')
+    doFirst {
+        File lintLibDir = new File(new File(System.getProperty("user.home")), '.android/lint')
+        def vshapeLintJar = new File(lintLibDir, 'percent-lint.jar')
+        if (vshapeLintJar.exists()) {
+            vshapeLintJar.delete()
+        }
+    }
+}
