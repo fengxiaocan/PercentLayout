@@ -29,12 +29,15 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.core.view.MarginLayoutParamsCompat;
-import androidx.core.view.ViewCompat;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static com.app.perc.PercentLayoutHelper.PercentLayoutInfo.BASEMODE.BASE_HEIGHT;
+import static com.app.perc.PercentLayoutHelper.PercentLayoutInfo.BASEMODE.BASE_SCREEN_HEIGHT;
+import static com.app.perc.PercentLayoutHelper.PercentLayoutInfo.BASEMODE.BASE_WIDTH;
 
 
 public class PercentLayoutHelper{
@@ -72,11 +75,9 @@ public class PercentLayoutHelper{
         int widthHint=View.MeasureSpec.getSize(widthMeasureSpec);
         int heightHint=View.MeasureSpec.getSize(heightMeasureSpec);
 
-
         for(int i=0, N=mHost.getChildCount();i<N;i++){
             View view=mHost.getChildAt(i);
             ViewGroup.LayoutParams params=view.getLayoutParams();
-
 
             if(params instanceof PercentLayoutParams){
                 PercentLayoutInfo info=((PercentLayoutParams)params).getPercentLayoutInfo();
@@ -87,8 +88,10 @@ public class PercentLayoutHelper{
 
                     if(params instanceof ViewGroup.MarginLayoutParams){
                         info.fillMarginLayoutParams((ViewGroup.MarginLayoutParams)params,widthHint,heightHint);
+                        info.fillLayoutParamsRatio(params,widthHint,heightHint);
                     } else{
                         info.fillLayoutParams(params,widthHint,heightHint);
+                        info.fillLayoutParamsRatio(params,widthHint,heightHint);
                     }
                 }
             }
@@ -124,8 +127,6 @@ public class PercentLayoutHelper{
             bottom=(int)(base*percentVal.percent);
         }
         view.setPadding(left,top,right,bottom);
-
-
     }
 
     private void supportMinOrMaxDimesion(int widthHint,int heightHint,View view,PercentLayoutInfo info)
@@ -233,6 +234,13 @@ public class PercentLayoutHelper{
         if(percentVal!=null){
             info=checkForInfoExists(info);
             info.heightPercent=percentVal;
+        }
+
+        //解析宽高比值
+        percentVal=getPercentVal(array,R.styleable.PercentLayout_Layout_layout_aspectRatio,true);
+        if(percentVal!=null){
+            info=checkForInfoExists(info);
+            info.aspectRatio=percentVal;
         }
         return info;
     }
@@ -424,38 +432,36 @@ public class PercentLayoutHelper{
 
     private static final String REGEX_PERCENT="^(([0-9]+)([.]([0-9]+))?|([.]([0-9]+))?)%([s]?[wh]?)$";
 
-    private static PercentLayoutInfo.PercentVal getPercentVal(String percentStr,boolean isOnWidth)
-    {
-        //valid param
-        if(percentStr==null){
-            return null;
-        }
+    private static float getPercentValue(String percentStr){
         Pattern p=Pattern.compile(REGEX_PERCENT);
         Matcher matcher=p.matcher(percentStr);
         if(!matcher.matches()){
             throw new RuntimeException("the value of layout_xxxPercent invalid! ==>"+percentStr);
         }
-//        int len=percentStr.length();
-        //extract the float value
         String floatVal=matcher.group(1);
-//        String lastAlpha=percentStr.substring(len-1);
+        return Float.parseFloat(floatVal)/100f;
+    }
 
-        float percent=Float.parseFloat(floatVal)/100f;
-
+    private static PercentLayoutInfo.PercentVal getPercentVal(String percentStr,boolean isOnWidth)
+    {
+        if(percentStr==null){
+            return null;
+        }
         PercentLayoutInfo.PercentVal percentVal=new PercentLayoutInfo.PercentVal();
-        percentVal.percent=percent;
+        percentVal.percent=getPercentValue(percentStr);
+
         if(percentStr.endsWith(PercentLayoutInfo.BASEMODE.SW)){
             percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_SCREEN_WIDTH;
         } else if(percentStr.endsWith(PercentLayoutInfo.BASEMODE.SH)){
             percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_SCREEN_HEIGHT;
         } else if(percentStr.endsWith(PercentLayoutInfo.BASEMODE.PERCENT)){
             if(isOnWidth){
-                percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_WIDTH;
+                percentVal.basemode=BASE_WIDTH;
             } else{
                 percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_HEIGHT;
             }
         } else if(percentStr.endsWith(PercentLayoutInfo.BASEMODE.W)){
-            percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_WIDTH;
+            percentVal.basemode=BASE_WIDTH;
         } else if(percentStr.endsWith(PercentLayoutInfo.BASEMODE.H)){
             percentVal.basemode=PercentLayoutInfo.BASEMODE.BASE_HEIGHT;
         } else{
@@ -500,36 +506,76 @@ public class PercentLayoutHelper{
                         needsSecondMeasure=true;
                         params.height=ViewGroup.LayoutParams.WRAP_CONTENT;
                     }
+                    if(shouldHandleMeasuredRatio(view,info,params)){
+                        needsSecondMeasure=true;
+                    }
                 }
             }
         }
         return needsSecondMeasure;
     }
 
+    private static boolean shouldHandleMeasuredRatio(
+            View view,PercentLayoutInfo info,ViewGroup.LayoutParams params)
+    {
+
+        if(info==null||info.aspectRatio==null){
+            return false;
+        }
+        int width=view.getMeasuredWidth();
+        int height=view.getMeasuredHeight();
+
+        if(width<=0&&height<=0){
+            return false;
+        }
+        final boolean isBaseWidth=info.aspectRatio.basemode!=BASE_HEIGHT&&info.aspectRatio.basemode!=BASE_SCREEN_HEIGHT;
+        final boolean isShouldRemeasure;
+        if(isBaseWidth){
+            isShouldRemeasure=height!=(int)(width*info.aspectRatio.percent);
+        } else{
+            isShouldRemeasure=width!=(int)(height*info.aspectRatio.percent);
+        }
+        if(isShouldRemeasure){
+            if(isBaseWidth){
+                if(width>0){
+                    params.width=width;
+                    params.height=(int)(width*info.aspectRatio.percent);
+                }
+            } else{
+                if(height>0){
+                    params.height=height;
+                    params.width=(int)(height*info.aspectRatio.percent);
+                }
+            }
+        }
+        return isShouldRemeasure;
+    }
+
     private static boolean shouldHandleMeasuredWidthTooSmall(View view,PercentLayoutInfo info)
     {
-        int state=ViewCompat.getMeasuredWidthAndState(view)&ViewCompat.MEASURED_STATE_MASK;
+
         if(info==null||info.widthPercent==null){
             return false;
         }
-        return state==ViewCompat.MEASURED_STATE_TOO_SMALL&&info.widthPercent.percent >= 0&&
+        int state=view.getMeasuredWidth();
+        return state==View.MEASURED_STATE_TOO_SMALL&&info.widthPercent.percent >= 0&&
                info.mPreservedParams.width==ViewGroup.LayoutParams.WRAP_CONTENT;
     }
 
     private static boolean shouldHandleMeasuredHeightTooSmall(View view,PercentLayoutInfo info)
     {
-        int state=ViewCompat.getMeasuredHeightAndState(view)&ViewCompat.MEASURED_STATE_MASK;
         if(info==null||info.heightPercent==null){
             return false;
         }
-        return state==ViewCompat.MEASURED_STATE_TOO_SMALL&&info.heightPercent.percent >= 0&&
+        int state=view.getMeasuredHeight();
+        return state==View.MEASURED_STATE_TOO_SMALL&&info.heightPercent.percent >= 0&&
                info.mPreservedParams.height==ViewGroup.LayoutParams.WRAP_CONTENT;
     }
 
 
     public static class PercentLayoutInfo{
 
-        private enum BASEMODE{
+        enum BASEMODE{
 
             BASE_WIDTH,
             BASE_HEIGHT,
@@ -567,6 +613,8 @@ public class PercentLayoutHelper{
 
         public PercentVal widthPercent;
         public PercentVal heightPercent;
+        //宽高比
+        public PercentVal aspectRatio;
 
         public PercentVal leftMarginPercent;
         public PercentVal topMarginPercent;
@@ -598,6 +646,36 @@ public class PercentLayoutHelper{
             mPreservedParams=new ViewGroup.MarginLayoutParams(0,0);
         }
 
+        public void fillLayoutParamsRatio(ViewGroup.LayoutParams params,int widthHint,int heightHint)
+        {
+            if(aspectRatio!=null){
+                boolean isBaseWidth=aspectRatio.basemode!=BASE_HEIGHT&&aspectRatio.basemode!=BASE_SCREEN_HEIGHT;
+                if(isBaseWidth){
+                    if(params.width==ViewGroup.LayoutParams.MATCH_PARENT){
+                        if(params instanceof ViewGroup.MarginLayoutParams){
+                            int leftMargin=((ViewGroup.MarginLayoutParams)params).leftMargin;
+                            int rightMargin=((ViewGroup.MarginLayoutParams)params).rightMargin;
+                            params.width=widthHint-leftMargin-rightMargin;
+                            params.height=(int)(params.width*aspectRatio.percent);
+                        }
+                    } else if(params.width>0){
+                        params.height=(int)(params.width*aspectRatio.percent);
+                    }
+                } else{
+                    if(params.height==ViewGroup.LayoutParams.MATCH_PARENT){
+                        if(params instanceof ViewGroup.MarginLayoutParams){
+                            int topMargin=((ViewGroup.MarginLayoutParams)params).topMargin;
+                            int bottomMargin=((ViewGroup.MarginLayoutParams)params).bottomMargin;
+                            params.height=heightHint-topMargin-bottomMargin;
+                            params.width=(int)(params.height*aspectRatio.percent);
+                        }
+                    } else if(params.height>0){
+                        params.width=(int)(params.height*aspectRatio.percent);
+                    }
+                }
+            }
+        }
+
         public void fillLayoutParams(ViewGroup.LayoutParams params,int widthHint,int heightHint)
         {
             // Preserve the original layout params, so we can restore them after the measure step.
@@ -612,7 +690,6 @@ public class PercentLayoutHelper{
                 int base=getBaseByModeAndVal(widthHint,heightHint,heightPercent.basemode);
                 params.height=(int)(base*heightPercent.percent);
             }
-
         }
 
         public void fillMarginLayoutParams(ViewGroup.MarginLayoutParams params,int widthHint,int heightHint)

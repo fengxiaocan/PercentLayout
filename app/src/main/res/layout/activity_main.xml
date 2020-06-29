@@ -5,12 +5,11 @@
     android:layout_height="match_parent">
 
     <TextView
+        android:id="@+id/tv_user"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@color/colorAccent"
         android:gravity="center"
-        android:text="Hello World!"
-        app:layout_paddingVerticalPercent="20%"
-        app:layout_paddingHorizontalPercent="10%"/>
+        app:layout_aspectRatio="100%" />
 
 </com.app.perc.PercentRelativeLayout>

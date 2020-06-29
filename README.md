@@ -33,5 +33,12 @@
 * layout_paddingBottomPercent
 * layout_paddingLeftPercent
 * layout_paddingRightPercent
+* layout_aspectRatio 绝对的宽高比例 值可以取 10%w , 10%h , 10%
 
 对于值可以取：10%w , 10%h , 10% , 10%sw , 10%sh
+
+
+***layout_aspectRatio的说明***
+   
+    10% == 10%w : 以宽度为基准,把高度固定为宽度的 10%
+    10%h : 以高度为基准,把宽度固定为高度的 10%
